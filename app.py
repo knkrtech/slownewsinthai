@@ -1,46 +1,45 @@
-from flask import Flask, jsonify, send_file
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-import requests
-import json
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 app = Flask(__name__)
 CORS(app)
 
-# Thai news API or RSS feed URL
-NEWS_API_URL = "https://example.com/thai-news-api"
+# Load a pre-trained model and tokenizer
+model_name = "t5-base"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
-# TTS service API key
-TTS_API_KEY = "YOUR_TTS_API_KEY"
-
-@app.route("/news", methods=["GET"])
-def get_news():
-    # Fetch news from API or RSS feed
-    news_data = requests.get(NEWS_API_URL).json()
-    
-    # Process news data (e.g., extract titles, summaries, etc.)
-    processed_news = []
-    for article in news_data:
-        title = article["title"]
-        summary = article["summary"]
-        processed_news.append({"title": title, "summary": summary})
-    
-    return jsonify(processed_news)
-
-@app.route("/audio/<string:news_id>", methods=["GET"])
-def get_audio(news_id):
-    # Fetch news article by ID
-    news_article = requests.get(f"{NEWS_API_URL}/{news_id}").json()
-    
-    # Convert text to speech using TTS service
-    tts_response = requests.post(
-        f"https://texttospeech.googleapis.com/v1/text:synthesize",
-        headers={"Content-Type": "application/json"},
-        data=json.dumps({"text": news_article["text"], "voice": "th-TH-Wavenet-A"}),
-        auth=("Bearer", TTS_API_KEY)
+# Define a function to translate text
+def translate_text(text):
+    # Preprocess the input text
+    inputs = tokenizer.encode_plus(
+        text,
+        add_special_tokens=True,
+        max_length=512,
+        return_attention_mask=True,
+        return_tensors="pt"
     )
-    
-    # Return audio file
-    return send_file(tts_response.content, mimetype="audio/mpeg")
+
+    # Generate the translation
+    outputs = model.generate(
+        inputs["input_ids"],
+        attention_mask=inputs["attention_mask"],
+        num_beams=4,
+        max_length=512,
+        early_stopping=True
+    )
+
+    # Postprocess the output
+    translation = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    return translation
+
+@app.route("/translate", methods=["POST"])
+def translate():
+    text = request.get_json()["text"]
+    translation = translate_text(text)
+    return jsonify({"translation": translation})
 
 if __name__ == "__main__":
     app.run(debug=True)

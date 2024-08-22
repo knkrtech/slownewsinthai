@@ -1,10 +1,15 @@
 import feedparser
-from googletrans import Translator
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
-from gTTS import gTTS
+from gtts import gTTS
 import os
+
+# Load a pre-trained model and tokenizer
+model_name = "t5-base"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
 def fetch_news_data():
     # Fetch news data from Bangkok Post's RSS feed
@@ -18,28 +23,36 @@ def fetch_news_data():
     return news_data
 
 def translate_text(text):
-    # Translate text from English to Thai using Google Translate
-    translator = Translator()
-    translated_text = translator.translate(text, dest='th')
-    return translated_text.text
+    # Preprocess the input text
+    inputs = tokenizer.encode_plus(
+        text,
+        add_special_tokens=True,
+        max_length=512,
+        return_attention_mask=True,
+        return_tensors="pt"
+    )
 
-def paraphrase_text(text):
-    # Paraphrase text using NLTK
-    tokens = word_tokenize(text)
-    stop_words = set(stopwords.words('english'))
-    filtered_tokens = [token for token in tokens if token.lower() not in stop_words]
-    paraphrased_text =''.join(filtered_tokens)
-    return paraphrased_text
+    # Generate the translation
+    outputs = model.generate(
+        inputs["input_ids"],
+        attention_mask=inputs["attention_mask"],
+        num_beams=4,
+        max_length=512,
+        early_stopping=True
+    )
+
+    # Postprocess the output
+    translation = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    return translation
 
 def generate_audio_files(news_data):
     # Generate audio files for each news article
     for article in news_data:
         translated_title = translate_text(article['title'])
-        paraphrased_title = paraphrase_text(translated_title)
         translated_content = translate_text(article['content'])
-        paraphrased_content = paraphrase_text(translated_content)
-        audio_file = gTTS(text=paraphrased_title +'' + paraphrased_content, lang='th')
-        audio_file.save(paraphrased_title + '.mp3')
+        audio_file = gTTS(text=translated_title + translated_content, lang='th')
+        audio_file.save(translated_title + '.mp3')
 
 def run_automation():
     news_data = fetch_news_data()
