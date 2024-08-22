@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thai News Audio</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.12/dist/vue.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <h1>Thai News Audio</h1>
+        <ul>
+            <li v-for="news in newsList" :key="news.id">
+                {{ news.title }}
+                <audio :src="`/audio/${news.id}`" controls></audio>
+                <p>{{ news.summary }}</p>
+            </li>
+        </ul>
+    </div>
+
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                newsList: []
+            },
+            mounted() {
+                fetch('/news')
+                   .then(response => response.json())
+                   .then(data => {
+                        this.newsList = data;
+                    });
+            }
+        });
+    </script>
+</body>
+</html>
