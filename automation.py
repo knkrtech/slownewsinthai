@@ -39,23 +39,19 @@ def compile_daily_post():
     for article in articles:
         thai_title = translate_text(article['title'])
         thai_content = translate_text(article['content'])
-        english_title = article['title']
-        english_content = article['content']
         
         compiled_post += f"• {thai_title}\n"
-        compiled_post += f"  (English: {english_title})\n"
-        
-        thai_sentences = re.split(r'(?<=[.!?])\s+', thai_content)
-        english_sentences = re.split(r'(?<=[.!?])\s+', english_content)
-        
-        for thai_sentence, english_sentence in zip(thai_sentences[:3], english_sentences[:3]):
-            compiled_post += f"  - {thai_sentence.strip()}\n"
-            compiled_post += f"    (English: {english_sentence.strip()})\n"
-        compiled_post += "\n"
+        compiled_post += f"  - {thai_content}\n\n"
+        compiled_post += f"English: {article['title']}\n"
+        compiled_post += f"English: {article['content']}\n\n"
     
     return compiled_post
 
 def text_to_speech(text, output_file):
+    print("Original text sent to text_to_speech:")
+    print(text)
+    print("=" * 50)
+
     client = texttospeech.TextToSpeechClient()
     voice = texttospeech.VoiceSelectionParams(
         language_code="th-TH",
@@ -66,15 +62,22 @@ def text_to_speech(text, output_file):
         speaking_rate=0.8
     )
 
-    # Remove English subtitles (content in parentheses)
-    thai_only_text = re.sub(r'\(English:.*?\)\n?', '', text)
+    # Remove all English content
+    thai_only_text = re.sub(r'\(English:.*?\)\n?|English:.*?(?=\n|$)', '', text, flags=re.DOTALL)
+    thai_only_text = '\n'.join([line for line in thai_only_text.split('\n') if not line.strip().startswith('English:')])
+
+    print("Thai-only text after filtering:")
+    print(thai_only_text)
+    print("=" * 50)
 
     # Split text into smaller chunks
     chunks = split_text(thai_only_text)
 
     combined_audio = AudioSegment.empty()
     for i, chunk in enumerate(chunks):
-        print(f"Processing chunk {i+1} of {len(chunks)}")
+        print(f"Processing chunk {i+1} of {len(chunks)}:")
+        print(chunk)
+        print("-" * 30)
         synthesis_input = texttospeech.SynthesisInput(text=chunk)
         try:
             response = client.synthesize_speech(
@@ -84,7 +87,6 @@ def text_to_speech(text, output_file):
             combined_audio += chunk_audio
         except Exception as e:
             print(f"Error processing chunk {i+1}: {e}")
-            print(f"Chunk content: {chunk[:100]}...")
 
     combined_audio.export(output_file, format="mp3")
     print(f"Audio content written to file {output_file}")
