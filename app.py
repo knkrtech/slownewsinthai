@@ -1,12 +1,25 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, request, jsonify, render_template_string
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from gtts import gTTS
+import os
+
+try:
+    import nltk
+except ImportError:
+    print("Installing nltk...")
+    import subprocess
+    subprocess.check_call(["pip", "install", "nltk"])
+    import nltk
+
+nltk.download('punkt')
 
 app = Flask(__name__)
-CORS(app)
 
 # Load a pre-trained model and tokenizer
-model_name = "t5-base"
+model_name = "facebook/nllb-200-distilled-600M-en-th"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
@@ -35,11 +48,32 @@ def translate_text(text):
 
     return translation
 
-@app.route("/translate", methods=["POST"])
+# Define a route for the root URL
+@app.route('/')
+def index():
+    return render_template_string('''
+        <html>
+            <body>
+                <h1>Welcome to my translation app!</h1>
+                <form action="/translate" method="post">
+                    <input type="text" name="text" placeholder="Enter text to translate">
+                    <input type="submit" value="Translate">
+                </form>
+            </body>
+        </html>
+    ''')
+
+# Define a route for the /translate endpoint
+@app.route('/translate', methods=['POST'])
 def translate():
-    text = request.get_json()["text"]
+    # Get the text to be translated from the request body
+    text = request.form['text']
+
+    # Translate the text
     translation = translate_text(text)
-    return jsonify({"translation": translation})
+
+    # Return the translation as a JSON response
+    return jsonify({'translation': translation})
 
 if __name__ == "__main__":
     app.run(debug=True)
