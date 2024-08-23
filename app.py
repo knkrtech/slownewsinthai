@@ -6,6 +6,8 @@ import os
 import glob
 import feedparser
 from dotenv import load_dotenv
+import requests
+from bs4 import BeautifulSoup
 
 # Load environment variables
 load_dotenv()
@@ -40,14 +42,14 @@ def index():
 @cache.cached(timeout=300)
 def get_articles():
     articles = fetch_rss_feed()
-    return jsonify([{'title': article.title, 'summary': article.summary} for article in articles[:10]])
+    return jsonify([{'title': article.title, 'summary': article.summary, 'content': article.content, 'link': article.link} for article in articles[:10]])
 
 @app.route('/process', methods=['POST'])
 def process():
     try:
         selected_indices = request.json['articles']
         articles = fetch_rss_feed()
-        selected_articles = [{'title': articles[int(i)].title, 'summary': articles[int(i)].summary} for i in selected_indices]
+        selected_articles = [{'title': articles[int(i)].title, 'summary': articles[int(i)].summary, 'content': articles[int(i)].content, 'link': articles[int(i)].link} for i in selected_indices]
 
         logger.info(f"Processing {len(selected_articles)} articles")
 
@@ -71,10 +73,32 @@ def process():
 def fetch_rss_feed():
     try:
         feed = feedparser.parse("https://www.bangkokpost.com/rss/data/topstories.xml")
-        return feed.entries
+        articles = []
+        for entry in feed.entries[:10]:  # Limit to 10 articles
+            try:
+                full_content = fetch_full_article_content(entry.link)
+                articles.append({
+                    'title': entry.title,
+                    'summary': entry.summary,
+                    'content': full_content,
+                    'link': entry.link
+                })
+            except Exception as e:
+                logger.error(f"Error fetching full content for {entry.link}: {str(e)}")
+        return articles
     except Exception as e:
         logger.error(f"Error fetching RSS feed: {str(e)}")
         return []
+
+def fetch_full_article_content(url):
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    article_body = soup.find('div', class_='articl-content')  # Adjust this selector based on the website's structure
+    if article_body:
+        paragraphs = article_body.find_all('p')
+        content = ' '.join([p.text for p in paragraphs])
+        return content[:1000]  # Limit to first 1000 characters (adjust as needed)
+    return ""
 
 if __name__ == "__main__":
     app.run(debug=True)

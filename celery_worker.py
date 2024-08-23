@@ -50,7 +50,7 @@ def translate_text(text):
 @celery.task
 def process_article(article):
     title = article['title']
-    content = article['summary']
+    content = article['content']
 
     translated_title = translate_text(title)
     translated_content = translate_text(content)
@@ -60,4 +60,5 @@ def process_article(article):
         'original_content': content,
         'translated_title': translated_title,
         'translated_content': translated_content,
+        'link': article['link']
     }
