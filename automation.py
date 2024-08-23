@@ -66,8 +66,11 @@ def text_to_speech(text, output_file):
         speaking_rate=0.8
     )
 
+    # Remove English subtitles (content in parentheses)
+    thai_only_text = re.sub(r'\(English:.*?\)\n?', '', text)
+
     # Split text into sentences and then into smaller chunks
-    sentences = re.split(r'(?<=[.!?])\s+', text)
+    sentences = re.split(r'(?<=[.!?])\s+', thai_only_text)
     chunks = []
     current_chunk = ""
     for sentence in sentences:
