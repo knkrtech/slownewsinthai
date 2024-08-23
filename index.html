@@ -1,27 +1,78 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Slow News in Thai</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.0.0/dist/tf.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bangkok Post News Translator</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; }
+        h1 { color: #333; }
+        #articles, #processedArticles { margin-top: 20px; }
+        .article { margin-bottom: 20px; border: 1px solid #ddd; padding: 10px; }
+        .article-checkbox { margin-right: 10px; }
+        #processButton { margin-top: 20px; }
+        #loading { display: none; }
+    </style>
 </head>
 <body>
-    <h1>Slow News in Thai</h1>
-    <p>This is a web application that translates news articles from English to Thai.</p>
-    <button onclick="fetchNews()">Fetch News</button>
+    <h1>Bangkok Post News Translator</h1>
+    <div id="articles"></div>
+    <button id="processButton">Process Selected Articles</button>
+    <div id="loading">Processing articles, please wait...</div>
+    <div id="processedArticles"></div>
+
     <script>
-        function fetchNews() {
-            fetch('/translate', {
+        fetch('/articles')
+            .then(response => response.json())
+            .then(articles => {
+                let articlesHtml = '';
+                articles.forEach((article, index) => {
+                    articlesHtml += `
+                        <div class="article">
+                            <input type="checkbox" id="article${index}" name="articles" value="${index}" class="article-checkbox">
+                            <label for="article${index}">${article.title}</label>
+                        </div>
+                    `;
+                });
+                document.getElementById('articles').innerHTML = articlesHtml;
+            });
+
+        document.getElementById('processButton').addEventListener('click', function() {
+            const selectedArticles = Array.from(document.querySelectorAll('input[name="articles"]:checked')).map(el => el.value);
+            if (selectedArticles.length === 0) {
+                alert('Please select at least one article to process.');
+                return;
+            }
+            
+            document.getElementById('loading').style.display = 'block';
+            fetch('/process', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    text: 'Hello, how are you?'
-                })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({articles: selectedArticles})
             })
-           .then(response => response.json())
-           .then(data => console.log(data));
-        }
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+                let processedHtml = '';
+                data.forEach(article => {
+                    processedHtml += `
+                        <div class="article">
+                            <h2>${article.translated_title}</h2>
+                            <p>${article.translated_content}</p>
+                            <h3>Original:</h3>
+                            <h4>${article.original_title}</h4>
+                            <p>${article.original_content}</p>
+                        </div>
+                    `;
+                });
+                document.getElementById('processedArticles').innerHTML = processedHtml;
+            })
+            .catch(error => {
+                document.getElementById('loading').style.display = 'none';
+                console.error('Error:', error);
+                alert('An error occurred while processing the articles.');
+            });
+        });
     </script>
 </body>
 </html>
