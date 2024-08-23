@@ -69,21 +69,12 @@ def text_to_speech(text, output_file):
     # Remove English subtitles (content in parentheses)
     thai_only_text = re.sub(r'\(English:.*?\)\n?', '', text)
 
-    # Split text into sentences and then into smaller chunks
-    sentences = re.split(r'(?<=[.!?])\s+', thai_only_text)
-    chunks = []
-    current_chunk = ""
-    for sentence in sentences:
-        if len(current_chunk) + len(sentence) < 2000:
-            current_chunk += sentence + " "
-        else:
-            chunks.append(current_chunk.strip())
-            current_chunk = sentence + " "
-    if current_chunk:
-        chunks.append(current_chunk.strip())
+    # Split text into smaller chunks
+    chunks = split_text(thai_only_text)
 
     combined_audio = AudioSegment.empty()
-    for chunk in chunks:
+    for i, chunk in enumerate(chunks):
+        print(f"Processing chunk {i+1} of {len(chunks)}")
         synthesis_input = texttospeech.SynthesisInput(text=chunk)
         try:
             response = client.synthesize_speech(
@@ -92,24 +83,48 @@ def text_to_speech(text, output_file):
             chunk_audio = AudioSegment.from_mp3(io.BytesIO(response.audio_content))
             combined_audio += chunk_audio
         except Exception as e:
-            print(f"Error processing chunk: {e}")
-            print(f"Chunk size: {len(chunk.encode('utf-8'))} bytes")
+            print(f"Error processing chunk {i+1}: {e}")
             print(f"Chunk content: {chunk[:100]}...")
 
     combined_audio.export(output_file, format="mp3")
     print(f"Audio content written to file {output_file}")
+    print(f"Total characters processed: {len(thai_only_text)}")
+
+def split_text(text, max_chars=1000):
+    chunks = []
+    current_chunk = ""
+    for line in text.split('\n'):
+        words = line.split()
+        for word in words:
+            if len(current_chunk) + len(word) + 1 > max_chars:
+                chunks.append(current_chunk.strip())
+                current_chunk = word + " "
+            else:
+                current_chunk += word + " "
+        current_chunk += "\n"
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    return chunks
 
 def run_daily_automation():
     try:
         print("Starting daily automation...")
         daily_post = compile_daily_post()
         print(f"Daily post compiled: {daily_post[:100]}...")  # Print first 100 chars
-        audio_filename = f"daily_summary_{datetime.now().strftime('%Y-%m-%d')}.mp3"
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        audio_filename = f"daily_summary_{timestamp}.mp3"
         audio_file_path = os.path.join(AUDIO_DIR, audio_filename)
+        
         print(f"Generating audio file: {audio_file_path}")
         text_to_speech(daily_post, audio_file_path)
-        print("Audio file generated successfully")
-        return daily_post, audio_file_path, daily_post
+        
+        if os.path.exists(audio_file_path) and os.path.getsize(audio_file_path) > 0:
+            print("Audio file generated successfully")
+            return daily_post, audio_filename, daily_post
+        else:
+            print("Audio file generation failed or file is empty")
+            return daily_post, None, daily_post
     except Exception as e:
         print(f"Error in run_daily_automation: {str(e)}")
-        raise
+        return daily_post, None, daily_post

@@ -37,26 +37,41 @@
             const mainTitle = document.getElementById('main-title');
             const summaryDiv = document.getElementById('daily-summary');
 
-            axios.get('/api/daily-summary')
-                .then(function (response) {
-                    const dateMatch = response.data.summary.match(/บทสรุปข่าวประจำวันที่ (\d{4}-\d{2}-\d{2})/);
-                    if (dateMatch) {
-                        mainTitle.textContent = `บทสรุปข่าวประจำวัน Bangkok Post (${dateMatch[1]})`;
-                        const content = response.data.summary.replace(/บทสรุปข่าวประจำวันที่ \d{4}-\d{2}-\d{2}\n\n/, '');
-                        const formattedContent = formatContent(content);
-                        summaryDiv.innerHTML = formattedContent;
-                    } else {
-                        summaryDiv.textContent = response.data.summary;
-                    }
-                    audioSource.src = '/api/audio-summary';
-                    audioElement.load();
-                })
-                .catch(function (error) {
-                    console.error('Error fetching daily summary:', error);
-                });
+            function updateContent() {
+                axios.get('/api/daily-summary')
+                    .then(function (response) {
+                        const dateMatch = response.data.summary.match(/บทสรุปข่าวประจำวันที่ (\d{4}-\d{2}-\d{2})/);
+                        if (dateMatch) {
+                            mainTitle.textContent = `บทสรุปข่าวประจำวัน Bangkok Post (${dateMatch[1]})`;
+                            const content = response.data.summary.replace(/บทสรุปข่าวประจำวันที่ \d{4}-\d{2}-\d{2}\n\n/, '');
+                            const formattedContent = formatContent(content);
+                            summaryDiv.innerHTML = formattedContent;
+                            
+                            // Use the exact audio filename returned by the server
+                            audioSource.src = `/audio/${response.data.audio_filename}`;
+                            console.log("Audio source set to:", audioSource.src);
+                            audioElement.load();
+                        } else {
+                            summaryDiv.textContent = response.data.summary;
+                        }
+                    })
+                    .catch(function (error) {
+                        console.error('Error fetching daily summary:', error);
+                    });
+            }
 
-            audioElement.addEventListener('error', function() {
-                console.error('Error loading audio file');
+            // Initial update
+            updateContent();
+
+            // Set up periodic updates (every 5 minutes)
+            setInterval(updateContent, 5 * 60 * 1000);
+
+            audioElement.addEventListener('loadeddata', function() {
+                console.log("Audio loaded successfully");
+            });
+
+            audioElement.addEventListener('error', function(e) {
+                console.error('Error loading audio file:', e);
             });
         });
 
