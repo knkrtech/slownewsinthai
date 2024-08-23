@@ -1,48 +1,46 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bangkok Post Daily Summary</title>
+    <title>บทสรุปข่าวประจำวัน Bangkok Post</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100">
     <div class="container mx-auto px-4 py-8">
-        <h1 class="text-3xl font-bold mb-4">Bangkok Post Daily Summary</h1>
+        <h1 class="text-3xl font-bold mb-4">บทสรุปข่าวประจำวัน Bangkok Post</h1>
         <div id="daily-summary" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
             <!-- Daily summary content will be inserted here -->
         </div>
-        <button id="play-audio" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-            Play Audio Summary
-        </button>
+        <div id="audio-player" class="mt-4">
+            <audio id="audio-element" controls>
+                <source id="audio-source" type="audio/mpeg">
+                Your browser does not support the audio element.
+            </audio>
+        </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const audioElement = document.getElementById('audio-element');
+            const audioSource = document.getElementById('audio-source');
+
             axios.get('/api/daily-summary')
                 .then(function (response) {
                     const summaryDiv = document.getElementById('daily-summary');
                     summaryDiv.innerHTML = `
-                        <h2>Summary</h2>
+                        <h2>บทสรุป</h2>
                         <div>${response.data.summary}</div>
-                        <h2>Transcript</h2>
-                        <div>${response.data.transcript}</div>
                     `;
+                    audioSource.src = '/api/audio-summary';
+                    audioElement.load();
                 })
                 .catch(function (error) {
                     console.error('Error fetching daily summary:', error);
                 });
 
-            document.getElementById('play-audio').addEventListener('click', function() {
-                axios.get('/api/audio-summary', { responseType: 'blob' })
-                    .then(function (response) {
-                        const audioUrl = URL.createObjectURL(response.data);
-                        const audio = new Audio(audioUrl);
-                        audio.play();
-                    })
-                    .catch(function (error) {
-                        console.error('Error playing audio summary:', error);
-                    });
+            audioElement.addEventListener('error', function() {
+                console.error('Error loading audio file');
             });
         });
     </script>
