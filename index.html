@@ -53,8 +53,15 @@
             .then(response => response.json())
             .then(data => {
                 document.getElementById('loading').style.display = 'none';
+                if (data.error) {
+                    throw new Error(data.error + (data.details ? ': ' + data.details.join('; ') : ''));
+                }
+                console.log('Processed articles:', data.processed);
+                if (data.errors && data.errors.length > 0) {
+                    console.warn('Some articles had errors:', data.errors);
+                }
                 let processedHtml = '';
-                data.forEach(article => {
+                data.processed.forEach(article => {
                     processedHtml += `
                         <div class="article">
                             <h2>${article.translated_title}</h2>
@@ -70,9 +77,31 @@
             .catch(error => {
                 document.getElementById('loading').style.display = 'none';
                 console.error('Error:', error);
-                alert('An error occurred while processing the articles.');
+                alert('An error occurred: ' + error.message);
             });
         });
+
+        function fetchArticles() {
+            fetch('/articles')
+                .then(response => response.json())
+                .then(articles => {
+                    const articleList = document.getElementById('article-list');
+                    articleList.innerHTML = '';
+                    articles.forEach(article => {
+                        const articleElement = document.createElement('div');
+                        articleElement.innerHTML = `
+                            <h2>${article.title}</h2>
+                            <p>${article.summary}</p>
+                            <a href="${article.link}" target="_blank">Read more</a>
+                        `;
+                        articleList.appendChild(articleElement);
+                    });
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Call fetchArticles when the page loads
+        document.addEventListener('DOMContentLoaded', fetchArticles);
     </script>
 </body>
 </html>

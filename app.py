@@ -42,49 +42,50 @@ def index():
 @cache.cached(timeout=300)
 def get_articles():
     articles = fetch_rss_feed()
-    return jsonify([{'title': article.title, 'summary': article.summary, 'content': article.content, 'link': article.link} for article in articles[:10]])
+    print(f"Fetched {len(articles)} articles")  # Add this line
+    return jsonify([{'title': article['title'], 'summary': article['summary'], 'content': article['content'], 'link': article['link']} for article in articles[:10]])
 
 @app.route('/process', methods=['POST'])
 def process():
     try:
         selected_indices = request.json['articles']
         articles = fetch_rss_feed()
-        selected_articles = [{'title': articles[int(i)].title, 'summary': articles[int(i)].summary, 'content': articles[int(i)].content, 'link': articles[int(i)].link} for i in selected_indices]
+        selected_articles = [{'title': articles[int(i)]['title'], 'summary': articles[int(i)]['summary'], 'content': articles[int(i)]['content'], 'link': articles[int(i)]['link']} for i in selected_indices]
 
-        logger.info(f"Processing {len(selected_articles)} articles")
+        print(f"Processing {len(selected_articles)} articles")  # Debug print
 
         processed_articles = []
+        errors = []
         for article in selected_articles:
             try:
                 processed = process_article(article)
-                logger.info(f"Processed article: {processed}")
+                print(f"Processed article: {processed['translated_title']}")  # Debug print
                 processed_articles.append(processed)
             except Exception as e:
-                logger.error(f"Error processing article '{article['title']}': {str(e)}")
+                error_msg = f"Error processing article '{article['title']}': {str(e)}"
+                print(error_msg)  # Debug print
+                errors.append(error_msg)
 
-        if not processed_articles:
-            raise Exception("No articles were successfully processed")
+        if not processed_articles and errors:
+            return jsonify({"error": "Errors occurred while processing articles", "details": errors}), 500
 
-        return jsonify(processed_articles)
+        return jsonify({"processed": processed_articles, "errors": errors})
     except Exception as e:
-        logger.error(f"Error processing articles: {str(e)}")
-        return jsonify({"error": "An error occurred while processing articles"}), 500
+        print(f"Error in /process route: {str(e)}")  # Debug print
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 def fetch_rss_feed():
     try:
         feed = feedparser.parse("https://www.bangkokpost.com/rss/data/topstories.xml")
+        print(f"Fetched {len(feed.entries)} entries from RSS feed")  # Add this line
         articles = []
         for entry in feed.entries[:10]:  # Limit to 10 articles
-            try:
-                full_content = fetch_full_article_content(entry.link)
-                articles.append({
-                    'title': entry.title,
-                    'summary': entry.summary,
-                    'content': full_content,
-                    'link': entry.link
-                })
-            except Exception as e:
-                logger.error(f"Error fetching full content for {entry.link}: {str(e)}")
+            articles.append({
+                'title': entry.title,
+                'summary': entry.description,  # Use description as summary
+                'content': entry.description,  # Use description as content
+                'link': entry.link
+            })
         return articles
     except Exception as e:
         logger.error(f"Error fetching RSS feed: {str(e)}")
