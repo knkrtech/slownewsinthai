@@ -1,62 +1,65 @@
 import feedparser
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-from gtts import gTTS
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from celery_worker import translate_text
+from google.cloud import texttospeech
 import os
 
-# Load a pre-trained model and tokenizer
-model_name = "t5-base"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+# Define the audio directory path
+AUDIO_DIR = '/workspaces/slownewsinthai/audio_files'
 
-def fetch_news_data():
-    # Fetch news data from Bangkok Post's RSS feed
-    feed = feedparser.parse('https://www.bangkokpost.com/rss/data/topstories.xml')
-    news_data = []
+# Ensure the directory exists
+os.makedirs(AUDIO_DIR, exist_ok=True)
+
+def fetch_daily_articles():
+    feed = feedparser.parse("https://www.bangkokpost.com/rss/data/topstories.xml")
+    bangkok_tz = ZoneInfo("Asia/Bangkok")
+    today = datetime.now(bangkok_tz).date()
+    
+    daily_articles = []
     for entry in feed.entries:
-        news_data.append({
-            'title': entry.title,
-            'content': entry.description
-        })
-    return news_data
+        pub_date = datetime(*entry.published_parsed[:6]).replace(tzinfo=ZoneInfo("UTC")).astimezone(bangkok_tz).date()
+        if pub_date == today:
+            daily_articles.append({
+                'title': entry.title,
+                'content': entry.description,
+                'link': entry.link,
+                'pub_date': pub_date
+            })
+    
+    return daily_articles
 
-def translate_text(text):
-    # Preprocess the input text
-    inputs = tokenizer.encode_plus(
-        text,
-        add_special_tokens=True,
-        max_length=512,
-        return_attention_mask=True,
-        return_tensors="pt"
+def compile_daily_post():
+    articles = fetch_daily_articles()
+    compiled_post = f"Daily News Summary for {datetime.now().strftime('%Y-%m-%d')}\n\n"
+    
+    for article in articles:
+        compiled_post += f"Title: {article['title']}\n"
+        compiled_post += f"Original: {article['content']}\n"
+        compiled_post += f"Translation: {translate_text(article['content'])}\n"
+        compiled_post += f"Link: {article['link']}\n\n"
+    
+    return compiled_post
+
+def text_to_speech(text, output_file):
+    client = texttospeech.TextToSpeechClient()
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+    voice = texttospeech.VoiceSelectionParams(
+        language_code="th-TH", 
+        name="th-TH-Standard-A"
     )
-
-    # Generate the translation
-    outputs = model.generate(
-        inputs["input_ids"],
-        attention_mask=inputs["attention_mask"],
-        num_beams=4,
-        max_length=512,
-        early_stopping=True
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3
     )
+    response = client.synthesize_speech(
+        input=synthesis_input, voice=voice, audio_config=audio_config
+    )
+    with open(output_file, "wb") as out:
+        out.write(response.audio_content)
 
-    # Postprocess the output
-    translation = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-    return translation
-
-def generate_audio_files(news_data):
-    # Generate audio files for each news article
-    for article in news_data:
-        translated_title = translate_text(article['title'])
-        translated_content = translate_text(article['content'])
-        audio_file = gTTS(text=translated_title + translated_content, lang='th')
-        audio_file.save(translated_title + '.mp3')
-
-def run_automation():
-    news_data = fetch_news_data()
-    generate_audio_files(news_data)
-
-if __name__ == "__main__":
-    run_automation()
+def run_daily_automation():
+    daily_post = compile_daily_post()
+    audio_filename = f"daily_summary_{datetime.now().strftime('%Y-%m-%d')}.mp3"
+    audio_file_path = os.path.join(AUDIO_DIR, audio_filename)
+    text_to_speech(daily_post, audio_file_path)
+    return daily_post, audio_file_path, daily_post

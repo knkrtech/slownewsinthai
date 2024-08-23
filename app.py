@@ -1,4 +1,8 @@
-from flask import Flask, request, jsonify, render_template, url_for
+import os
+
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/workspaces/slownewsinthai/.secrets/total-pier-425200-f4-a424dd7f6f3a.json'
+
+from flask import Flask, request, jsonify, render_template, url_for, send_file
 from flask_caching import Cache
 import time
 import logging
@@ -8,6 +12,7 @@ import feedparser
 from dotenv import load_dotenv
 import requests
 from bs4 import BeautifulSoup
+from automation import compile_daily_post, text_to_speech, run_daily_automation
 
 # Load environment variables
 load_dotenv()
@@ -100,6 +105,30 @@ def fetch_full_article_content(url):
         content = ' '.join([p.text for p in paragraphs])
         return content[:1000]  # Limit to first 1000 characters (adjust as needed)
     return ""
+
+@app.route('/api/daily-summary')
+def get_daily_summary():
+    try:
+        daily_post, _, transcript = run_daily_automation()
+        print(f"Daily post: {daily_post[:100]}...")  # Print first 100 chars
+        print(f"Transcript: {transcript[:100]}...")  # Print first 100 chars
+        return jsonify({
+            "summary": daily_post,
+            "transcript": transcript
+        })
+    except Exception as e:
+        print(f"Error in get_daily_summary: {str(e)}")
+        import traceback
+        traceback.print_exc()  # This will print the full stack trace
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/audio-summary')
+def get_audio_summary():
+    _, audio_file_path, _ = run_daily_automation()
+    if os.path.exists(audio_file_path):
+        return send_file(audio_file_path, mimetype="audio/mp3")
+    else:
+        return "Audio file not found", 404
 
 if __name__ == "__main__":
     app.run(debug=True)

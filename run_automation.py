@@ -1,9 +1,16 @@
 import os
 import subprocess
+from automation import run_daily_automation
+import schedule
+import time
 
-def run_automation():
-    # Run automation script in the background
-    subprocess.Popen(['python', 'automation.py'])
+def job():
+    daily_post, audio_file = run_daily_automation()
+    print(f"Daily compilation completed. Audio file saved as {audio_file}")
 
-if __name__ == "__main__":
-    run_automation()
+# Schedule the job to run daily at midnight
+schedule.every().day.at("00:00").do(job)
+
+while True:
+    schedule.run_pending()
+    time.sleep(60)

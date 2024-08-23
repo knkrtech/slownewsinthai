@@ -3,105 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bangkok Post News Translator</title>
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; }
-        h1 { color: #333; }
-        #articles, #processedArticles { margin-top: 20px; }
-        .article { margin-bottom: 20px; border: 1px solid #ddd; padding: 10px; }
-        .article-checkbox { margin-right: 10px; }
-        #processButton { margin-top: 20px; }
-        #loading { display: none; }
-    </style>
+    <title>Bangkok Post Daily Summary</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<body>
-    <h1>Bangkok Post News Translator</h1>
-    <div id="articles"></div>
-    <button id="processButton">Process Selected Articles</button>
-    <div id="loading">Processing articles, please wait...</div>
-    <div id="processedArticles"></div>
-
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-4">Bangkok Post Daily Summary</h1>
+        <div id="daily-summary" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+            <!-- Daily summary content will be inserted here -->
+        </div>
+        <button id="play-audio" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            Play Audio Summary
+        </button>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
-        fetch('/articles')
-            .then(response => response.json())
-            .then(articles => {
-                let articlesHtml = '';
-                articles.forEach((article, index) => {
-                    articlesHtml += `
-                        <div class="article">
-                            <input type="checkbox" id="article${index}" name="articles" value="${index}" class="article-checkbox">
-                            <label for="article${index}">${article.title}</label>
-                        </div>
+        document.addEventListener('DOMContentLoaded', function() {
+            axios.get('/api/daily-summary')
+                .then(function (response) {
+                    const summaryDiv = document.getElementById('daily-summary');
+                    summaryDiv.innerHTML = `
+                        <h2>Summary</h2>
+                        <div>${response.data.summary}</div>
+                        <h2>Transcript</h2>
+                        <div>${response.data.transcript}</div>
                     `;
+                })
+                .catch(function (error) {
+                    console.error('Error fetching daily summary:', error);
                 });
-                document.getElementById('articles').innerHTML = articlesHtml;
-            });
 
-        document.getElementById('processButton').addEventListener('click', function() {
-            const selectedArticles = Array.from(document.querySelectorAll('input[name="articles"]:checked')).map(el => el.value);
-            if (selectedArticles.length === 0) {
-                alert('Please select at least one article to process.');
-                return;
-            }
-            
-            document.getElementById('loading').style.display = 'block';
-            fetch('/process', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({articles: selectedArticles})
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('loading').style.display = 'none';
-                if (data.error) {
-                    throw new Error(data.error + (data.details ? ': ' + data.details.join('; ') : ''));
-                }
-                console.log('Processed articles:', data.processed);
-                if (data.errors && data.errors.length > 0) {
-                    console.warn('Some articles had errors:', data.errors);
-                }
-                let processedHtml = '';
-                data.processed.forEach(article => {
-                    processedHtml += `
-                        <div class="article">
-                            <h2>${article.translated_title}</h2>
-                            <p>${article.translated_content}</p>
-                            <h3>Original:</h3>
-                            <h4>${article.original_title}</h4>
-                            <p>${article.original_content}</p>
-                        </div>
-                    `;
-                });
-                document.getElementById('processedArticles').innerHTML = processedHtml;
-            })
-            .catch(error => {
-                document.getElementById('loading').style.display = 'none';
-                console.error('Error:', error);
-                alert('An error occurred: ' + error.message);
+            document.getElementById('play-audio').addEventListener('click', function() {
+                axios.get('/api/audio-summary', { responseType: 'blob' })
+                    .then(function (response) {
+                        const audioUrl = URL.createObjectURL(response.data);
+                        const audio = new Audio(audioUrl);
+                        audio.play();
+                    })
+                    .catch(function (error) {
+                        console.error('Error playing audio summary:', error);
+                    });
             });
         });
-
-        function fetchArticles() {
-            fetch('/articles')
-                .then(response => response.json())
-                .then(articles => {
-                    const articleList = document.getElementById('article-list');
-                    articleList.innerHTML = '';
-                    articles.forEach(article => {
-                        const articleElement = document.createElement('div');
-                        articleElement.innerHTML = `
-                            <h2>${article.title}</h2>
-                            <p>${article.summary}</p>
-                            <a href="${article.link}" target="_blank">Read more</a>
-                        `;
-                        articleList.appendChild(articleElement);
-                    });
-                })
-                .catch(error => console.error('Error:', error));
-        }
-
-        // Call fetchArticles when the page loads
-        document.addEventListener('DOMContentLoaded', fetchArticles);
     </script>
 </body>
 </html>
