@@ -6,6 +6,7 @@ from celery_worker import translate_text
 from google.cloud import texttospeech
 from pydub import AudioSegment
 import io
+import re
 
 # Define the audio directory path
 AUDIO_DIR = '/workspaces/slownewsinthai/audio_files'
@@ -33,46 +34,53 @@ def fetch_daily_articles():
 
 def compile_daily_post():
     articles = fetch_daily_articles()
-    compiled_post = f"บทสรุปข่า��ประจำวันที่ {datetime.now().strftime('%Y-%m-%d')}\n\n"
+    compiled_post = f"บทสรุปข่าวประจำวันที่ {datetime.now(ZoneInfo('Asia/Bangkok')).strftime('%Y-%m-%d')}\n\n"
     
     for article in articles:
-        compiled_post += f"หัวข้อ: {article['title']}\n"
-        compiled_post += f"เนื้อหา: {translate_text(article['content'])}\n"
-        compiled_post += f"ลิงก์: {article['link']}\n\n"
+        thai_title = translate_text(article['title'])
+        thai_content = translate_text(article['content'])
+        english_title = article['title']
+        english_content = article['content']
+        
+        compiled_post += f"• {thai_title}\n"
+        compiled_post += f"  (English: {english_title})\n"
+        
+        thai_sentences = re.split(r'(?<=[.!?])\s+', thai_content)
+        english_sentences = re.split(r'(?<=[.!?])\s+', english_content)
+        
+        for thai_sentence, english_sentence in zip(thai_sentences[:3], english_sentences[:3]):
+            compiled_post += f"  - {thai_sentence.strip()}\n"
+            compiled_post += f"    (English: {english_sentence.strip()})\n"
+        compiled_post += "\n"
     
     return compiled_post
 
 def text_to_speech(text, output_file):
     client = texttospeech.TextToSpeechClient()
     voice = texttospeech.VoiceSelectionParams(
-        language_code="th-TH", 
-        name="th-TH-Standard-A"
+        language_code="th-TH",
+        name="th-TH-Neural2-C"
     )
     audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3
+        audio_encoding=texttospeech.AudioEncoding.MP3,
+        speaking_rate=0.8
     )
 
-    # Split the text into smaller chunks (approximately 3000 bytes each)
-    def split_text(text, chunk_size=3000):
-        words = text.split()
-        chunks = []
-        current_chunk = []
-        current_size = 0
-        for word in words:
-            if current_size + len(word.encode('utf-8')) > chunk_size:
-                chunks.append(' '.join(current_chunk))
-                current_chunk = []
-                current_size = 0
-            current_chunk.append(word)
-            current_size += len(word.encode('utf-8')) + 1  # +1 for space
-        if current_chunk:
-            chunks.append(' '.join(current_chunk))
-        return chunks
+    # Split text into sentences and then into smaller chunks
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    chunks = []
+    current_chunk = ""
+    for sentence in sentences:
+        if len(current_chunk) + len(sentence) < 2000:
+            current_chunk += sentence + " "
+        else:
+            chunks.append(current_chunk.strip())
+            current_chunk = sentence + " "
+    if current_chunk:
+        chunks.append(current_chunk.strip())
 
-    text_chunks = split_text(text)
-    
     combined_audio = AudioSegment.empty()
-    for chunk in text_chunks:
+    for chunk in chunks:
         synthesis_input = texttospeech.SynthesisInput(text=chunk)
         try:
             response = client.synthesize_speech(
@@ -83,7 +91,7 @@ def text_to_speech(text, output_file):
         except Exception as e:
             print(f"Error processing chunk: {e}")
             print(f"Chunk size: {len(chunk.encode('utf-8'))} bytes")
-            print(f"Chunk content: {chunk[:100]}...")  # Print first 100 characters of the chunk
+            print(f"Chunk content: {chunk[:100]}...")
 
     combined_audio.export(output_file, format="mp3")
     print(f"Audio content written to file {output_file}")

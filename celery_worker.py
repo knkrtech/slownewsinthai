@@ -1,6 +1,6 @@
 from celery import Celery
 import time
-from google.cloud import translate_v3 as translate
+from google.cloud import translate_v2 as translate
 import os
 from dotenv import load_dotenv
 import logging
@@ -25,10 +25,16 @@ celery.conf.update(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-client = translate.TranslationServiceClient()
-project_id = "total-pier-425200-f4"  # Replace if different
-location = "global"
-parent = f"projects/{project_id}/locations/{location}"
+translate_client = translate.Client()
+
+@celery.task
+def translate_text(text, target_lang='th'):
+    try:
+        result = translate_client.translate(text, target_language=target_lang)
+        return result['translatedText']
+    except Exception as e:
+        print(f"Translation error: {str(e)}")
+        return text  # Return original text if translation fails
 
 @celery.task
 def process_article(article):
@@ -56,24 +62,4 @@ def process_article(article):
         }
     except Exception as e:
         print(f"Error in process_article: {str(e)}")  # Debug print
-        raise
-
-@celery.task
-def translate_text(text):
-    if not text.strip():
-        return "No content to translate."
-    
-    try:
-        response = client.translate_text(
-            request={
-                "parent": parent,
-                "contents": [text],
-                "mime_type": "text/plain",
-                "source_language_code": "en-US",
-                "target_language_code": "th",
-            }
-        )
-        return response.translations[0].translated_text
-    except Exception as e:
-        print(f"Error in translate_text: {str(e)}")  # Debug print
         raise
